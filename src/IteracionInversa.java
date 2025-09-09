@@ -9,8 +9,8 @@ public class IteracionInversa extends JPanel {
     private final int pixels = 1000;   // imagen cuadrada: pixels x pixels
 
     // --- Parámetro c = cRe + i cIm ---
-    private final double cRe = -0.39054087021840056;
-    private final double cIm = -0.5867879073469685;
+    private final double cRe = -0.765;
+    private final double cIm = 0.12;
 
     // --- Control de recursión ---
     private final int maxIter = 18;  // genera 2^maxIter puntos
@@ -37,7 +37,7 @@ public class IteracionInversa extends JPanel {
         img = new BufferedImage(pixels, pixels, BufferedImage.TYPE_INT_RGB);
 
         // Fondo + ejes con ticks cada 0.1
-        pintarFondoYEjes();
+        //pintarFondoYEjes();
 
         // 1) Punto fijo repulsivo de z^2 - z + c = 0
         Complex c = new Complex(cRe, cIm);

@@ -5,14 +5,14 @@ import java.awt.image.BufferedImage;
 public class EscapeFunciones extends JPanel {
 
     private double xmin, xmax, ymin, ymax;
-    private int maxIter = 150;
+    private int maxIter = 100;
     private double escape = 2.0;
 
     private BufferedImage img;
 
     // Valor fijo de c (puedes cambiarlo directamente en el código)
-    private double cRe = -0.39054087021840056;
-    private double cIm = -0.5867879073469685;
+    private double cRe = -0.122561;
+    private double cIm = 0.744862;
 
     public EscapeFunciones(int width, int height,
                            double xmin, double xmax,

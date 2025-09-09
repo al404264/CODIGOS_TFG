@@ -7,7 +7,7 @@ public class AlgoritmoEscape extends JPanel {
 
     private double xMinimo, xMaximo, yMinimo, yMaximo;
 
-    private int maxIteraciones = 200;
+    private int maxIteraciones = 1000;
     private double radioEscape = 2.0;
 
     private BufferedImage imagen;
@@ -207,13 +207,11 @@ public class AlgoritmoEscape extends JPanel {
 
     /* ---------- HUD superior ---------- */
     private void dibujarHUDSuperior(Graphics g) {
-        int hudW = 520, hudH = 48, m = 10;
+        int hudW = 180, hudH = 48, m = 10;
         int xHud = m, yHud = m; // arriba-izquierda
         g.setColor(new Color(0, 0, 0, 160));
         g.fillRect(xHud, yHud, hudW, hudH);
         g.setColor(Color.WHITE);
-        g.drawString(String.format("Región: [%.6f, %.6f] × [%.6f, %.6f]", xMinimo, xMaximo, yMinimo, yMaximo),
-                xHud + 10, yHud + 20);
 
         String textoCursor = "Cursor: —";
         if (cursor != null) {
