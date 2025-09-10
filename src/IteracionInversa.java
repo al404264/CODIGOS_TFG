@@ -1,78 +1,88 @@
 import javax.swing.*;
 import java.awt.*;
 import java.awt.image.BufferedImage;
-import java.text.DecimalFormat;
 
 public class IteracionInversa extends JPanel {
 
-    // --- Imagen ---
-    private final int pixels = 1000;   // imagen cuadrada: pixels x pixels
+    // --- Parámetros de imagen ---
+    private final int pixels = 1000;   // imagen pixels x pixels (cuadrada)
 
     // --- Parámetro c = cRe + i cIm ---
-    private final double cRe = -0.765;
-    private final double cIm = 0.12;
+    private final double cRe = -0.39054087021840056;
+    private final double cIm = -0.5867879073469685;
 
     // --- Control de recursión ---
-    private final int maxIter = 18;  // genera 2^maxIter puntos
-    private final double D = 1e10;   // umbral para derivada acumulada
+    private final int maxIter = 18;     // # niveles (genera 2^maxIter puntos)
+    private final double D = 1e10;      // umbral para derAcu
 
-    // --- Viewport (controla centro y zoom) ---
-    // Para ver EXACTAMENTE [-2,2] × [-2,2]:
+    // --- Viewport (centrado y zoom) ---
+    // Centro de la ventana en el plano complejo:
     private final double cx = 0.0;
     private final double cy = 0.0;
-    private final double baseHalf = 2.0; // semiancho base
-    private final double zoom = 1.0;     // zoom=1 => [-2,2]×[-2,2]
 
-    // Límites del viewport
+    // Semiancho base = 2.0 equivale a mostrar [-2,2] x [-2,2] cuando zoom=1
+    private final double baseHalf = 2.0;
+
+    // zoom > 1: acercar; 0 < zoom < 1: ALEJAR (verás la figura “más pequeña”)
+    private final double zoom = 0.5; // p.ej. 0.5 = alejar 2×, 0.25 = alejar 4×
+
+    // Límites del viewport (se calculan a partir de cx,cy, baseHalf y zoom)
     private final double xmin, xmax, ymin, ymax;
 
     private BufferedImage img;
 
     public IteracionInversa() {
+        // calcular viewport respetando aspecto 1:1 (imagen cuadrada)
         double halfX = baseHalf / zoom;
-        double halfY = halfX; // imagen cuadrada
-        xmin = cx - halfX; xmax = cx + halfX;   // => -2 a 2
-        ymin = cy - halfY; ymax = cy + halfY;   // => -2 a 2
+        double halfY = halfX; // mismo porque pixels x pixels
+        xmin = cx - halfX; xmax = cx + halfX;
+        ymin = cy - halfY; ymax = cy + halfY;
 
         img = new BufferedImage(pixels, pixels, BufferedImage.TYPE_INT_RGB);
+        pintarFondo(Color.WHITE);
 
-        // Fondo + ejes con ticks cada 0.1
-        //pintarFondoYEjes();
-
-        // 1) Punto fijo repulsivo de z^2 - z + c = 0
+        // 1) PRECÁLCULO: z0 punto fijo repulsivo de z^2 - z + c = 0
         Complex c = new Complex(cRe, cIm);
-        Complex z0 = fixedPointRepulsivo(c);
+        Complex z0 = fixedPointRepulsivo(c); // elige raíz con |2 z0| > 1
 
-        // 2) Iteración inversa determinista
+        // 2) ENTRADA: z=z0, derAcu=1, nIter=0
         iterarInversamente(z0, 1.0, 0);
     }
 
     // ---------- Algoritmo principal ----------
     private void iterarInversamente(Complex z, double derAcu, int nIter) {
+        // 3) Corte
         if (nIter >= maxIter || derAcu > D) return;
 
+        // 6) derAcu <- derAcu · |2z|
         derAcu *= 2.0 * z.abs();
 
+        // 7-10) pintar
         int[] p = getPixelPosition(z.re, z.im);
         int px = p[0], py = p[1];
         if (0 <= px && px < pixels && 0 <= py && py < pixels) {
-            img.setRGB(px, py, 0xFFFFFF);
+            img.setRGB(px, py, 0x000000);
         }
 
+        // 11) raiz <- sqrt(z - c)
         Complex raiz = sqrtPrincipal(z.sub(new Complex(cRe, cIm)));
+
+        // 12-13) Llamadas recursivas con ambas ramas
         iterarInversamente(raiz,       derAcu, nIter + 1);
         iterarInversamente(raiz.neg(), derAcu, nIter + 1);
     }
 
-    // ---------- Complejos ----------
+    // ---------- Utilidades complejas ----------
     private static class Complex {
         final double re, im;
         Complex(double re, double im) { this.re = re; this.im = im; }
+        Complex add(Complex w) { return new Complex(re + w.re, im + w.im); }
         Complex sub(Complex w) { return new Complex(re - w.re, im - w.im); }
         Complex neg() { return new Complex(-re, -im); }
         double abs() { return Math.hypot(re, im); }
     }
 
+    // sqrt complejo (rama principal): sqrt(r) * e^{i theta/2}
     private Complex sqrtPrincipal(Complex w) {
         double r = w.abs();
         if (r == 0.0) return new Complex(0, 0);
@@ -82,6 +92,7 @@ public class IteracionInversa extends JPanel {
         return new Complex(rootR * Math.cos(a), rootR * Math.sin(a));
     }
 
+    // z0 repulsivo: raíz de z^2 - z + c = 0 con |2z|>1
     private Complex fixedPointRepulsivo(Complex c) {
         // z = (1 ± sqrt(1 - 4c)) / 2
         Complex disc = sqrtPrincipal(new Complex(1 - 4*c.re, -4*c.im));
@@ -93,107 +104,24 @@ public class IteracionInversa extends JPanel {
         boolean repMinus = dMinus > 1.0;
         if (repPlus && !repMinus) return zPlus;
         if (repMinus && !repPlus) return zMinus;
-        return zPlus; // si ambos o ninguno, toma zPlus
+        return zPlus; // si ambos o ninguno, coge zPlus
     }
 
-    // ---------- Mapeo a píxel: ¡usar xmin,xmax,ymin,ymax! ----------
+    // ---------- Mapeo a píxel con viewport ----------
     private int[] getPixelPosition(double x, double y) {
-        int px = (int) Math.round( (x - xmin) * (pixels - 1) / (xmax - xmin) );
-        int py = (int) Math.round( (ymax - y) * (pixels - 1) / (ymax - ymin) ); // Y hacia arriba
+        // px = 0 en x = xmin, px = pixels-1 en x = xmax
+        int px = (int) Math.round((x - xmin) * (pixels - 1) / (xmax - xmin));
+        // Invertimos vertical: y = ymax -> py = 0 ; y = ymin -> py = pixels-1
+        int py = (int) Math.round((ymax - y) * (pixels - 1) / (ymax - ymin));
         return new int[]{px, py};
     }
 
-    // ---------- Ejes con ticks cada 0.1 ----------
-    private void pintarFondoYEjes() {
+    // ---------- Dibujo ----------
+    private void pintarFondo(Color color) {
         Graphics2D g = img.createGraphics();
-        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-        g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-
-        // Fondo negro
-        g.setColor(Color.BLACK);
+        g.setColor(color);
         g.fillRect(0, 0, pixels, pixels);
-
-        // Ejes principales
-        g.setColor(Color.LIGHT_GRAY);
-        g.setStroke(new BasicStroke(1.5f));
-
-        // Eje X (Im=0)
-        if (ymin <= 0 && 0 <= ymax) {
-            int[] a = getPixelPosition(xmin, 0);
-            int[] b = getPixelPosition(xmax, 0);
-            g.drawLine(a[0], a[1], b[0], b[1]);
-        }
-
-        // Eje Y (Re=0)
-        if (xmin <= 0 && 0 <= xmax) {
-            int[] a = getPixelPosition(0, ymin);
-            int[] b = getPixelPosition(0, ymax);
-            g.drawLine(a[0], a[1], b[0], b[1]);
-        }
-
-        // Ticks y etiquetas cada 0.1
-        g.setColor(new Color(200, 200, 200));
-        g.setStroke(new BasicStroke(1f));
-        g.setFont(new Font("SansSerif", Font.PLAIN, 10));
-        DecimalFormat df = new DecimalFormat("0.0");
-
-        double paso = 0.2;
-        int tickLen = 6;
-        int tickLenMajor = 10;
-
-        // Ticks sobre el eje X (y=0), variando x
-        if (ymin <= 0 && 0 <= ymax) {
-            double x0 = Math.ceil(xmin / paso) * paso;
-            int yPix = getPixelPosition(0, 0)[1];
-            for (double x = x0; x <= xmax + 1e-12; x += paso) {
-                int xPix = getPixelPosition(x, 0)[0];
-                boolean major = isMultiple(x, 0.5) || isMultiple(x, 1.0);
-                int len = major ? tickLenMajor : tickLen;
-                g.drawLine(xPix, yPix - len/2, xPix, yPix + len/2);
-
-                String label = fmt(df, x);
-                int strW = g.getFontMetrics().stringWidth(label);
-                int strH = g.getFontMetrics().getAscent();
-                g.drawString(label, xPix - strW/2, yPix + len/2 + 2 + strH);
-            }
-        }
-
-        // Ticks sobre el eje Y (x=0), variando y
-        if (xmin <= 0 && 0 <= xmax) {
-            double y0 = Math.ceil(ymin / paso) * paso;
-            int xPix = getPixelPosition(0, 0)[0];
-            for (double y = y0; y <= ymax + 1e-12; y += paso) {
-                int yPix = getPixelPosition(0, y)[1];
-                boolean major = isMultiple(y, 0.5) || isMultiple(y, 1.0);
-                int len = major ? tickLenMajor : tickLen;
-                g.drawLine(xPix - len/2, yPix, xPix + len/2, yPix);
-
-                String label = fmt(df, y) + "i";
-                int strW = g.getFontMetrics().stringWidth(label);
-                int strH = g.getFontMetrics().getAscent();
-                g.drawString(label, xPix + len/2 + 3, yPix + strH/2 - 2);
-            }
-        }
-
-        // Origen marcado
-        if (xmin <= 0 && 0 <= xmax && ymin <= 0 && 0 <= ymax) {
-            int[] o = getPixelPosition(0, 0);
-            g.setColor(Color.WHITE);
-            g.fillOval(o[0]-2, o[1]-2, 4, 4);
-        }
-
         g.dispose();
-    }
-
-    private boolean isMultiple(double x, double m) {
-        double r = Math.abs(x / m - Math.rint(x / m));
-        return r < 1e-9;
-    }
-
-    private String fmt(DecimalFormat df, double v) {
-        String s = df.format(v);
-        if (s.equals("-0.0")) s = "0.0";
-        return s;
     }
 
     @Override
@@ -202,10 +130,11 @@ public class IteracionInversa extends JPanel {
         g.drawImage(img, 0, 0, null);
     }
 
+    // ---------- Arranque ----------
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
             IteracionInversa panel = new IteracionInversa();
-            JFrame f = new JFrame("Julia por iteración inversa (ejes cada 0.1, ventana [-2,2]×[-2,2])");
+            JFrame f = new JFrame("Julia por iteración inversa (viewport con zoom)");
             f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
             f.add(panel);
             f.setSize(panel.pixels, panel.pixels);

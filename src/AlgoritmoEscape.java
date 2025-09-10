@@ -23,7 +23,7 @@ public class AlgoritmoEscape extends JPanel {
     }
 
     public AlgoritmoEscape(int ancho, int alto,
-                             double xMinimo, double xMaximo, double yMinimo, double yMaximo) {
+                           double xMinimo, double xMaximo, double yMinimo, double yMaximo) {
         setPreferredSize(new Dimension(ancho, alto));
         this.xMinimo = xMinimo; this.xMaximo = xMaximo; this.yMinimo = yMinimo; this.yMaximo = yMaximo;
 
