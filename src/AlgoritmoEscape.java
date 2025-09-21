@@ -2,6 +2,8 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
 import java.awt.image.BufferedImage;
+import java.util.ArrayDeque;
+import java.util.Deque;
 
 public class AlgoritmoEscape extends JPanel {
 
@@ -17,6 +19,18 @@ public class AlgoritmoEscape extends JPanel {
     private Point cursor = null;
 
     private static final double PASO_FIJO = 0.2;
+
+    // --- Historial de vistas para deshacer zooms ---
+    private final Deque<double[]> pilaVistas = new ArrayDeque<>();
+    private void pushVista() {
+        pilaVistas.push(new double[]{xMinimo, xMaximo, yMinimo, yMaximo});
+    }
+    private boolean popVista() {
+        if (pilaVistas.isEmpty()) return false;
+        double[] r = pilaVistas.pop();
+        renderRegion(r[0], r[1], r[2], r[3], true);
+        return true;
+    }
 
     public AlgoritmoEscape(int ancho, int alto) {
         this(ancho, alto, -2.5, 1.0, -1.25, 1.25);
@@ -37,7 +51,7 @@ public class AlgoritmoEscape extends JPanel {
             @Override public void mouseDragged(MouseEvent e) { finArrastre = e.getPoint(); repaint(); }
             @Override public void mouseReleased(MouseEvent e) {
                 if (inicioArrastre != null && finArrastre != null) {
-                    aplicarZoomCajaRecrear(inicioArrastre, finArrastre); // sustituye el panel por uno nuevo
+                    aplicarZoomCajaRedibujar(inicioArrastre, finArrastre); // redibuja en la nueva región
                 }
                 inicioArrastre = finArrastre = null;
             }
@@ -51,7 +65,7 @@ public class AlgoritmoEscape extends JPanel {
         addMouseListener(manejadorRaton);
         addMouseMotionListener(manejadorRaton);
 
-        /* Resize: ajusta aspecto de la región inicial (solo la primera vez) */
+        /* Resize: ajusta aspecto de la región (si cambia el viewport) */
         addComponentListener(new ComponentAdapter() {
             @Override public void componentResized(ComponentEvent e) {
                 imagen = null;
@@ -62,7 +76,19 @@ public class AlgoritmoEscape extends JPanel {
         });
     }
 
-    /* ---------- Aspecto inicial ---------- */
+    /* ---------- Punto de entrada único para recalcular en una región ---------- */
+    private void renderRegion(double nxmin, double nxmax, double nymin, double nymax, boolean mantenerAspecto) {
+        this.xMinimo = nxmin; this.xMaximo = nxmax;
+        this.yMinimo = nymin; this.yMaximo = nymax;
+
+        if (mantenerAspecto) {
+            ajustarAspectoAlViewport(); // respeta el aspecto del viewport
+        }
+
+        recalcularTodo(); // fuerza el recomputo completo del Mandelbrot en la nueva ventana
+    }
+
+    /* ---------- Aspecto inicial/actual ---------- */
     private void ajustarAspectoAlViewport() {
         double w = getWidth(), h = getHeight();
         if (w <= 0 || h <= 0) return;
@@ -99,10 +125,10 @@ public class AlgoritmoEscape extends JPanel {
             zx = zx2; zy = zy2;
             if (zx * zx + zy * zy > r2) break;
         }
-        if (n == maxIteraciones) return 0xFF000000;
+        if (n == maxIteraciones) return 0xFF000000; // negro: interior (no escapó)
 
         double modulo = Math.sqrt(zx * zx + zy * zy);
-        double nu = n + 1 - Math.log(Math.log(modulo)) / Math.log(2.0);
+        double nu = n + 1 - Math.log(Math.log(modulo)) / Math.log(2.0); // suavizado
         double t = Math.max(0.0, Math.min(1.0, nu / maxIteraciones));
         float tono = (float) (0.95f + 10.0 * t); tono = tono - (float) Math.floor(tono);
         int rgb = Color.HSBtoRGB(tono, 0.75f, 1.0f);
@@ -124,55 +150,68 @@ public class AlgoritmoEscape extends JPanel {
         necesitaRedibujar = false;
     }
 
-    private void recalcularTodo() { imagen = null; necesitaRedibujar = true; dibujarFractal(); repaint(); }
+    private void recalcularTodo() {
+        imagen = null;
+        necesitaRedibujar = true;
+        dibujarFractal();
+        repaint();
+    }
 
-    /* ---------- Zoom centrado / recentrar ---------- */
+    /* ---------- Zoom centrado / recentrar (usan historial y renderRegion) ---------- */
     private void hacerZoomEn(int px, int py, double escala) {
         double[] c = pixelAComplejo(px, py);
         double cx = c[0], cy = c[1];
         double w = (xMaximo - xMinimo) * escala, h = (yMaximo - yMinimo) * escala;
-        xMinimo = cx - w / 2.0; xMaximo = cx + w / 2.0;
-        yMinimo = cy - h / 2.0; yMaximo = cy + h / 2.0;
-        recalcularTodo();
+
+        pushVista(); // guardar estado actual
+        renderRegion(cx - w / 2.0, cx + w / 2.0, cy - h / 2.0, cy + h / 2.0, true);
     }
     private void recentrarEn(int px, int py) {
         double[] c = pixelAComplejo(px, py);
         double cx = c[0], cy = c[1];
         double w = (xMaximo - xMinimo), h = (yMaximo - yMinimo);
-        xMinimo = cx - w / 2.0; xMaximo = cx + w / 2.0;
-        yMinimo = cy - h / 2.0; yMaximo = cy + h / 2.0;
-        recalcularTodo();
+
+        pushVista(); // guardar estado actual
+        renderRegion(cx - w / 2.0, cx + w / 2.0, cy - h / 2.0, cy + h / 2.0, true);
     }
 
-    /* ---------- Zoom por recuadro (recrear viewer) ---------- */
-    private void aplicarZoomCajaRecrear(Point a, Point b) {
+    /* ---------- Zoom por recuadro (redibuja en el mismo panel) ---------- */
+    private void aplicarZoomCajaRedibujar(Point a, Point b) {
         int x1 = Math.max(0, Math.min(a.x, b.x));
         int x2 = Math.min(getWidth() - 1, Math.max(a.x, b.x));
         int y1 = Math.max(0, Math.min(a.y, b.y));
         int y2 = Math.min(getHeight() - 1, Math.max(a.y, b.y));
         if (x2 - x1 < 10 || y2 - y1 < 10) return;
 
+        // Adaptar el recuadro al aspecto del viewport (opcional: true)
+        boolean mantenerAspecto = true;
+        if (mantenerAspecto) {
+            double aspView = (double) getWidth() / getHeight();
+            int selW = x2 - x1, selH = y2 - y1;
+            double aspSel = (double) selW / selH;
+            if (aspSel > aspView) {
+                // ampliar vertical
+                int nuevaH = (int) Math.round(selW / aspView);
+                int delta = (nuevaH - selH) / 2;
+                y1 = Math.max(0, y1 - delta);
+                y2 = Math.min(getHeight() - 1, y2 + delta);
+            } else if (aspSel < aspView) {
+                // ampliar horizontal
+                int nuevaW = (int) Math.round(selH * aspView);
+                int delta = (nuevaW - selW) / 2;
+                x1 = Math.max(0, x1 - delta);
+                x2 = Math.min(getWidth() - 1, x2 + delta);
+            }
+        }
+
+        // Mapeo a coordenadas complejas
         double[] cInfIzq = pixelAComplejo(x1, y2); // inf-izda
         double[] cSupDer = pixelAComplejo(x2, y1); // sup-dcha
-        double nuevoXMin = cInfIzq[0], nuevoYMin = cInfIzq[1], nuevoXMax = cSupDer[0], nuevoYMax = cSupDer[1];
+        double nuevoXMin = cInfIzq[0], nuevoYMin = cInfIzq[1];
+        double nuevoXMax = cSupDer[0], nuevoYMax = cSupDer[1];
 
-        SwingUtilities.invokeLater(() -> {
-            Window win = SwingUtilities.getWindowAncestor(this);
-            if (!(win instanceof JFrame)) {
-                // fallback: si no hay frame, actualizamos en este mismo panel
-                this.xMinimo = nuevoXMin; this.xMaximo = nuevoXMax; this.yMinimo = nuevoYMin; this.yMaximo = nuevoYMax;
-                recalcularTodo();
-                return;
-            }
-            JFrame frame = (JFrame) win;
-            AlgoritmoEscape nuevo = new AlgoritmoEscape(getWidth(), getHeight(), nuevoXMin, nuevoXMax, nuevoYMin, nuevoYMax);
-            nuevo.maxIteraciones = this.maxIteraciones;
-            nuevo.radioEscape = this.radioEscape;
-            frame.setContentPane(nuevo);
-            frame.revalidate();
-            frame.repaint();
-            nuevo.requestFocusInWindow();
-        });
+        pushVista(); // guardar vista actual para deshacer
+        renderRegion(nuevoXMin, nuevoXMax, nuevoYMin, nuevoYMax, true);
     }
 
     /* ---------- Dibujo ---------- */
@@ -279,7 +318,7 @@ public class AlgoritmoEscape extends JPanel {
     }
 
     /* ---------- Teclado ---------- */
-    private void asignarTeclas(JFrame frame) {
+    public void asignarTeclas(JFrame frame) {
         frame.addKeyListener(new KeyAdapter() {
             @Override public void keyPressed(KeyEvent e) {
                 switch (e.getKeyCode()) {
@@ -294,7 +333,11 @@ public class AlgoritmoEscape extends JPanel {
                         xMinimo = -2.5; xMaximo = 1.0; yMinimo = -1.25; yMaximo = 1.25;
                         ajustarAspectoAlViewport();
                         maxIteraciones = 1000;
+                        pilaVistas.clear();
                         recalcularTodo(); break;
+                    case KeyEvent.VK_BACK_SPACE:
+                        if (!popVista()) Toolkit.getDefaultToolkit().beep();
+                        break;
                 }
             }
         });
