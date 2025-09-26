@@ -9,7 +9,7 @@ public class IteracionInversa extends JPanel {
 
     // --- Parámetro c = cRe + i cIm ---
     private double cRe = 0;
-    private double cIm = 1;
+    private double cIm = 0;
 
     // --- Control de recursión ---
     private final double maxIter = 1e11;     // # niveles (genera 2^maxIter puntos)

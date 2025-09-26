@@ -12,7 +12,7 @@ public class EscapeFunciones extends JPanel {
 
     // Valor fijo de c (puedes cambiarlo directamente en el código)
     private double cRe = 0;
-    private double cIm = 1;
+    private double cIm = 0;
 
     public EscapeFunciones(int width, int height,
                            double xmin, double xmax,
