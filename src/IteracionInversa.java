@@ -8,12 +8,12 @@ public class IteracionInversa extends JPanel {
     private final int pixels = 1000;   // imagen pixels x pixels (cuadrada)
 
     // --- Parámetro c = cRe + i cIm ---
-    private double cRe = -0.39054087021840056;
-    private double cIm = -0.5867879073469685;
+    private double cRe = 0;
+    private double cIm = 1;
 
     // --- Control de recursión ---
-    private final int maxIter = 26;     // # niveles (genera 2^maxIter puntos)
-    private final double D = 1e25;      // umbral para derAcu
+    private final double maxIter = 1e11;     // # niveles (genera 2^maxIter puntos)
+    private final double D = 1e6;      // umbral para derAcu
 
     // --- Viewport (centrado y zoom) ---
     // Centro de la ventana en el plano complejo:
